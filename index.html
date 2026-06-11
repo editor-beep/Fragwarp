@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRAGWARP • Fragment Distortion Playground</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+    
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #050505;
+      font-family: 'Inter', system_ui, sans-serif;
+    }
+    
+    canvas { display: block; outline: none; }
+    
+    .glass {
+      background: rgba(10, 10, 14, 0.72);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    
+    .threejs-label {
+      font-family: 'Space Grotesk', 'Inter', sans-serif;
+      letter-spacing: -0.025em;
+    }
+
+    .control-btn {
+      transition: all 0.1s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .control-btn:hover {
+      background-color: rgba(255,255,255,0.1);
+      transform: translateY(-1px);
+    }
+    .control-btn:active { transform: scale(0.985); }
+
+    .slider-label {
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .effect-btn {
+      transition: all 0.1s ease;
+    }
+    .effect-btn.active {
+      background-color: rgba(103, 232, 249, 0.15);
+      border-color: #67f6ff;
+      color: #67f6ff;
+    }
+
+    .shader-stat {
+      font-variant-numeric: tabular-nums;
+      font-family: ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body class="bg-[#050505] text-white select-none">
+  <!-- Top Navigation -->
+  <div class="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex items-center justify-between border-b border-white/5">
+    <div class="flex items-center gap-x-4">
+      <div class="flex items-center gap-x-3">
+        <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-400 via-teal-400 to-violet-500 flex items-center justify-center shadow-inner">
+          <span class="text-[#050505] font-bold text-2xl tracking-[-2px]">W</span>
+        </div>
+        <div>
+          <div class="threejs-label text-2xl font-semibold tracking-[-1.5px]">FRAGWARP</div>
+          <div class="text-[10px] text-white/40 -mt-1.5 pl-0.5">FRAGMENT DISTORTION PLAYGROUND</div>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center px-3 py-1 text-[10px] rounded-full bg-white/5 text-white/50 font-mono">THREE.JS + VANILLA JS</div>
+    </div>
+
+    <div class="flex items-center gap-x-2">
+      <div class="hidden md:flex items-center gap-x-1.5 px-3 py-1.5 glass rounded-2xl text-xs">
+        <div class="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse"></div>
+        <span class="text-white/60">WEBGL • LIVE SHADERS</span>
+      </div>
+
+      <button onclick="resetCamera()" 
+              class="control-btn px-4 py-2 text-xs font-medium glass hover:bg-white/10 rounded-2xl flex items-center gap-x-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.058 11H1M12 3v2m0 16v2m9-9H15m-6 0a8.002 8.002 0 01-3.356-2.5" />
+        </svg>
+        <span>RESET</span>
+      </button>
+
+      <button onclick="randomizeAll()" 
+              class="control-btn px-4 py-2 text-xs font-medium glass hover:bg-white/10 rounded-2xl flex items-center gap-x-2">
+        <span>RANDOMIZE</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Right Control Panel -->
+  <div class="fixed top-20 right-6 bottom-6 z-40 w-72 glass rounded-3xl p-5 flex flex-col overflow-hidden border border-white/10">
+    <div class="mb-4">
+      <div class="text-xs uppercase tracking-[1px] text-white/40 mb-2 px-1">EFFECT</div>
+      <div class="grid grid-cols-2 gap-2" id="effect-buttons">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <div class="flex-1 overflow-y-auto pr-1 custom-scroll space-y-5">
+      <!-- Parameters -->
+      <div>
+        <div class="text-xs uppercase tracking-[1px] text-white/40 mb-3 px-1">PARAMETERS</div>
+        
+        <div class="space-y-4">
+          <!-- Intensity -->
+          <div>
+            <div class="flex justify-between items-baseline mb-1.5 px-1">
+              <div class="slider-label text-white/70">Intensity</div>
+              <div id="val-intensity" class="shader-stat text-xs text-cyan-400">0.85</div>
+            </div>
+            <input type="range" id="slider-intensity" min="0" max="2.5" step="0.01" value="0.85"
+                   class="w-full accent-cyan-400 bg-white/10 rounded-lg">
+          </div>
+
+          <!-- Speed -->
+          <div>
+            <div class="flex justify-between items-baseline mb-1.5 px-1">
+              <div class="slider-label text-white/70">Speed</div>
+              <div id="val-speed" class="shader-stat text-xs text-cyan-400">1.00</div>
+            </div>
+            <input type="range" id="slider-speed" min="0" max="4" step="0.01" value="1.0"
+                   class="w-full accent-cyan-400 bg-white/10 rounded-lg">
+          </div>
+
+          <!-- Frequency / Scale -->
+          <div>
+            <div class="flex justify-between items-baseline mb-1.5 px-1">
+              <div class="slider-label text-white/70">Frequency</div>
+              <div id="val-frequency" class="shader-stat text-xs text-cyan-400">6.50</div>
+            </div>
+            <input type="range" id="slider-frequency" min="0.5" max="22" step="0.1" value="6.5"
+                   class="w-full accent-cyan-400 bg-white/10 rounded-lg">
+          </div>
+
+          <!-- Secondary Strength -->
+          <div>
+            <div class="flex justify-between items-baseline mb-1.5 px-1">
+              <div class="slider-label text-white/70">Warp Strength</div>
+              <div id="val-strength" class="shader-stat text-xs text-cyan-400">1.20</div>
+            </div>
+            <input type="range" id="slider-strength" min="0" max="3" step="0.01" value="1.2"
+                   class="w-full accent-cyan-400 bg-white/10 rounded-lg">
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-white/10">
+        <div class="text-xs uppercase tracking-[1px] text-white/40 mb-3 px-1">OPTIONS</div>
+        
+        <div class="space-y-2.5">
+          <label class="flex items-center justify-between px-1 cursor-pointer">
+            <div class="text-sm text-white/80">Auto-rotate</div>
+            <input type="checkbox" id="toggle-rotate" checked class="accent-cyan-400 w-4 h-4">
+          </label>
+          
+          <label class="flex items-center justify-between px-1 cursor-pointer">
+            <div class="text-sm text-white/80">Wireframe</div>
+            <input type="checkbox" id="toggle-wireframe" class="accent-cyan-400 w-4 h-4">
+          </label>
+          
+          <label class="flex items-center justify-between px-1 cursor-pointer">
+            <div class="text-sm text-white/80">Mouse influence</div>
+            <input type="checkbox" id="toggle-mouse" checked class="accent-cyan-400 w-4 h-4">
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="pt-4 mt-auto border-t border-white/10">
+      <button onclick="copyCurrentShader()" 
+              class="w-full py-2.5 text-xs font-medium glass hover:bg-white/10 rounded-2xl flex items-center justify-center gap-x-2 text-white/80 hover:text-white">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16v-4m4 4v4m4-8v8m4-4v-4m-16 8h16a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2" />
+        </svg>
+        <span>COPY CURRENT SHADER</span>
+      </button>
+      <div class="text-center text-[10px] text-white/30 mt-3">Open in any browser • Works offline after load</div>
+    </div>
+  </div>
+
+  <!-- Bottom hint -->
+  <div class="fixed bottom-6 left-6 z-40 hidden md:block">
+    <div class="glass px-4 py-2.5 rounded-2xl text-xs flex items-center gap-x-3 text-white/60">
+      <div class="font-mono text-[10px] px-1.5 py-px bg-white/10 rounded">DRAG</div>
+      <span>Orbit • Scroll to zoom • Double-click recenter</span>
+    </div>
+  </div>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind config
+    function initTailwind() {
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'grotesk': ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif']
+            }
+          }
+        }
+      };
+    }
+    initTailwind();
+  </script>
+
+  <!-- Three.js + App -->
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js';
+
+    // === STATE ===
+    let scene, camera, renderer, controls;
+    let sphere, material;
+    let currentEffect = 'ripple';
+    let autoRotate = true;
+    let mouseInfluence = true;
+    let mousePos = new THREE.Vector2(0.5, 0.5);
+    let frame = 0;
+
+    // Persistent uniform values across effect switches
+    const uniformState = {
+      intensity: 0.85,
+      speed: 1.0,
+      frequency: 6.5,
+      strength: 1.2
+    };
+
+    // Effect definitions
+    const effects = {
+      ripple: {
+        name: "Ripple",
+        description: "Classic sine wave distortion",
+        uniforms: { intensity: 0.85, speed: 1.0, frequency: 6.5, strength: 1.2 },
+        fragment: `
+          uniform float uTime;
+          uniform float uIntensity;
+          uniform float uSpeed;
+          uniform float uFrequency;
+          uniform float uStrength;
+          uniform vec3 uColorA;
+          uniform vec3 uColorB;
+          uniform vec2 uMouse;
+
+          varying vec2 vUv;
+          varying vec3 vNormal;
+
+          void main() {
+            vec2 uv = vUv - 0.5;
+            float dist = length(uv);
+            
+            // Mouse influence on center
+            vec2 center = mix(vec2(0.0), uMouse * 0.6 - 0.3, 0.6);
+            float mouseDist = length(uv - center);
+            
+            // Multi-layered ripple
+            float wave1 = sin(dist * uFrequency - uTime * uSpeed * 1.8) * uIntensity * 0.09;
+            float wave2 = sin(mouseDist * (uFrequency * 1.3) + uTime * uSpeed * 2.2) * uIntensity * 0.07 * uStrength;
+            
+            vec2 distorted = uv + normalize(uv + 0.0001) * (wave1 + wave2);
+            
+            // Rich pattern
+            float rings = sin(length(distorted) * 22.0 + uTime * 1.2) * 0.5 + 0.5;
+            float flow = sin(distorted.x * 18.0 + distorted.y * 14.0 - uTime * 1.6) * 0.5 + 0.5;
+            
+            vec3 color = mix(uColorA, uColorB, rings * flow * 0.9 + 0.1);
+            color += vec3(0.15, 0.25, 0.35) * sin(distorted.x * 45.0 + uTime * 3.0) * uIntensity * 0.4;
+            
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      },
+      glitch: {
+        name: "Glitch",
+        description: "Digital band shifting + RGB split",
+        uniforms: { intensity: 0.7, speed: 2.2, frequency: 4.0, strength: 1.5 },
+        fragment: `
+          uniform float uTime;
+          uniform float uIntensity;
+          uniform float uSpeed;
+          uniform float uFrequency;
+          uniform float uStrength;
+          uniform vec3 uColorA;
+          uniform vec3 uColorB;
+          uniform vec2 uMouse;
+
+          varying vec2 vUv;
+
+          float rand(float n) { return fract(sin(n) * 43758.5453123); }
+
+          void main() {
+            vec2 uv = vUv;
+            float t = uTime * uSpeed * 0.8;
+            
+            // Glitch bands
+            float band = floor(uv.y * uFrequency * 1.5);
+            float glitchOffset = (rand(band + floor(t * 3.0)) - 0.5) * uIntensity * 0.18 * uStrength;
+            
+            // Mouse reactive glitch strength
+            float mouseFactor = 1.0 + length(uv - uMouse) * 1.5;
+            glitchOffset *= mouseFactor;
+            
+            vec2 rUv = uv + vec2(glitchOffset * 1.2, 0.0);
+            vec2 gUv = uv + vec2(glitchOffset * 0.3, 0.0);
+            vec2 bUv = uv - vec2(glitchOffset * 0.9, 0.0);
+            
+            // Base pattern distorted differently per channel
+            float r = sin(rUv.x * 28.0 + t * 2.0) * sin(rUv.y * 19.0 - t) * 0.5 + 0.5;
+            float g = sin(gUv.x * 31.0 - t * 1.7) * sin(gUv.y * 22.0 + t * 0.8) * 0.5 + 0.5;
+            float b = sin(bUv.x * 25.0 + t) * sin(bUv.y * 17.0 - t * 1.3) * 0.5 + 0.5;
+            
+            vec3 color = vec3(r, g, b) * uColorA + (1.0 - vec3(r, g, b)) * uColorB * 0.6;
+            
+            // Extra digital noise lines
+            float scan = step(0.98, fract(uv.y * 80.0 + t * 4.0));
+            color += vec3(0.4, 0.8, 1.0) * scan * uIntensity * 0.6;
+            
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      },
+      twirl: {
+        name: "Twirl",
+        description: "Polar vortex distortion",
+        uniforms: { intensity: 1.1, speed: 0.6, frequency: 3.2, strength: 0.9 },
+        fragment: `
+          uniform float uTime;
+          uniform float uIntensity;
+          uniform float uSpeed;
+          uniform float uFrequency;
+          uniform float uStrength;
+          uniform vec3 uColorA;
+          uniform vec3 uColorB;
+          uniform vec2 uMouse;
+
+          varying vec2 vUv;
+
+          void main() {
+            vec2 uv = vUv - 0.5;
+            float radius = length(uv);
+            float angle = atan(uv.y, uv.x);
+            
+            // Vortex twist
+            float twist = (radius * uFrequency * 2.5 - uTime * uSpeed * 1.4) * uIntensity * 0.9;
+            float distortedAngle = angle + twist * (1.0 - radius * 0.6) * uStrength;
+            
+            // Mouse pull
+            vec2 mouseOffset = (uMouse - 0.5) * 0.4;
+            float mouseAngle = atan(uv.y - mouseOffset.y, uv.x - mouseOffset.x);
+            distortedAngle += mouseAngle * uIntensity * 0.15 * length(mouseOffset);
+            
+            vec2 distorted = vec2(cos(distortedAngle), sin(distortedAngle)) * radius;
+            
+            // Spiral pattern
+            float spiral = sin(radius * 32.0 + distortedAngle * 6.0 + uTime * 2.5) * 0.5 + 0.5;
+            float rings = sin(radius * 18.0 - uTime * 1.8) * 0.5 + 0.5;
+            
+            vec3 color = mix(uColorA, uColorB, spiral * rings);
+            color += vec3(0.2, 0.1, 0.4) * sin(distortedAngle * 12.0 + radius * 25.0) * uIntensity * 0.5;
+            
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      },
+      noise: {
+        name: "Noise Flow",
+        description: "Organic domain warping",
+        uniforms: { intensity: 0.95, speed: 0.85, frequency: 5.8, strength: 1.6 },
+        fragment: `
+          uniform float uTime;
+          uniform float uIntensity;
+          uniform float uSpeed;
+          uniform float uFrequency;
+          uniform float uStrength;
+          uniform vec3 uColorA;
+          uniform vec3 uColorB;
+          uniform vec2 uMouse;
+
+          varying vec2 vUv;
+
+          // Simple value noise
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+          }
+          float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+          }
+
+          void main() {
+            vec2 uv = vUv * uFrequency * 0.6;
+            float t = uTime * uSpeed * 0.5;
+            
+            // Domain warp
+            float n1 = noise(uv + vec2(t * 0.4, t * 0.3));
+            float n2 = noise(uv * 1.7 - vec2(t * 0.2, -t * 0.5));
+            
+            vec2 warp = vec2(n1, n2) * uIntensity * 0.18 * uStrength;
+            vec2 distorted = uv + warp + (uMouse - 0.5) * uIntensity * 0.25;
+            
+            // Flowing pattern
+            float f1 = noise(distorted * 1.3 + t * 0.8);
+            float f2 = noise(distorted * 2.4 - t * 0.6 + 3.0);
+            float pattern = f1 * 0.6 + f2 * 0.4;
+            
+            vec3 color = mix(uColorA, uColorB, pattern);
+            color += vec3(0.1, 0.3, 0.25) * noise(distorted * 4.5 + t) * uIntensity * 0.7;
+            
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      }
+    };
+
+    const sharedVertex = `
+      varying vec2 vUv;
+      varying vec3 vNormal;
+
+      void main() {
+        vUv = uv;
+        vNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    function createShaderMaterial(effectKey) {
+      const effect = effects[effectKey];
+      if (!effect) return null;
+
+      // Build uniforms from state + effect defaults
+      const uniforms = {
+        uTime: { value: 0 },
+        uIntensity: { value: uniformState.intensity },
+        uSpeed: { value: uniformState.speed },
+        uFrequency: { value: uniformState.frequency },
+        uStrength: { value: uniformState.strength },
+        uColorA: { value: new THREE.Color(0x67f6ff) },
+        uColorB: { value: new THREE.Color(0xa78bfa) },
+        uMouse: { value: new THREE.Vector2(mousePos.x, mousePos.y) }
+      };
+
+      // Override with effect-specific starting values if different
+      Object.keys(effect.uniforms).forEach(key => {
+        if (uniforms['u' + key.charAt(0).toUpperCase() + key.slice(1)]) {
+          uniforms['u' + key.charAt(0).toUpperCase() + key.slice(1)].value = effect.uniforms[key];
+        }
+      });
+
+      return new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: sharedVertex,
+        fragmentShader: effect.fragment,
+        side: THREE.DoubleSide
+      });
+    }
+
+    function updateUniform(name, value) {
+      if (!material || !material.uniforms) return;
+      
+      const uniformName = 'u' + name.charAt(0).toUpperCase() + name.slice(1);
+      if (material.uniforms[uniformName]) {
+        material.uniforms[uniformName].value = value;
+      }
+      // Keep state in sync
+      if (uniformState.hasOwnProperty(name)) {
+        uniformState[name] = value;
+      }
+    }
+
+    function switchEffect(effectKey) {
+      if (!sphere || effectKey === currentEffect) return;
+
+      const oldMaterial = sphere.material;
+      
+      // Create new material with current slider values
+      const newMaterial = createShaderMaterial(effectKey);
+      sphere.material = newMaterial;
+      material = newMaterial;
+
+      // Dispose old
+      if (oldMaterial) oldMaterial.dispose();
+
+      currentEffect = effectKey;
+
+      // Update active button styles
+      document.querySelectorAll('.effect-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.effect === effectKey);
+      });
+    }
+
+    function setupEffectButtons() {
+      const container = document.getElementById('effect-buttons');
+      container.innerHTML = '';
+
+      Object.keys(effects).forEach(key => {
+        const effect = effects[key];
+        const btn = document.createElement('button');
+        btn.className = `effect-btn px-3 py-2.5 text-xs rounded-2xl border border-white/10 text-left flex flex-col justify-center ${key === currentEffect ? 'active' : 'glass hover:bg-white/5'}`;
+        btn.dataset.effect = key;
+        btn.innerHTML = `
+          <div class="font-medium">${effect.name}</div>
+          <div class="text-[10px] text-white/40 leading-none mt-0.5">${effect.description}</div>
+        `;
+        btn.onclick = () => switchEffect(key);
+        container.appendChild(btn);
+      });
+    }
+
+    function setupSliders() {
+      const sliders = [
+        { id: 'slider-intensity', valId: 'val-intensity', name: 'intensity', min: 0, max: 2.5, step: 0.01 },
+        { id: 'slider-speed', valId: 'val-speed', name: 'speed', min: 0, max: 4, step: 0.01 },
+        { id: 'slider-frequency', valId: 'val-frequency', name: 'frequency', min: 0.5, max: 22, step: 0.1 },
+        { id: 'slider-strength', valId: 'val-strength', name: 'strength', min: 0, max: 3, step: 0.01 }
+      ];
+
+      sliders.forEach(({ id, valId, name }) => {
+        const slider = document.getElementById(id);
+        const valueDisplay = document.getElementById(valId);
+
+        // Set initial value from state
+        slider.value = uniformState[name];
+        valueDisplay.textContent = parseFloat(slider.value).toFixed(name === 'frequency' ? 1 : 2);
+
+        slider.oninput = () => {
+          const val = parseFloat(slider.value);
+          valueDisplay.textContent = val.toFixed(name === 'frequency' ? 1 : 2);
+          updateUniform(name, val);
+        };
+      });
+
+      // Toggles
+      const rotateToggle = document.getElementById('toggle-rotate');
+      rotateToggle.checked = autoRotate;
+      rotateToggle.onchange = (e) => { autoRotate = e.target.checked; };
+
+      const wireToggle = document.getElementById('toggle-wireframe');
+      wireToggle.onchange = (e) => {
+        if (sphere) sphere.material.wireframe = e.target.checked;
+      };
+
+      const mouseToggle = document.getElementById('toggle-mouse');
+      mouseToggle.checked = mouseInfluence;
+      mouseToggle.onchange = (e) => { mouseInfluence = e.target.checked; };
+    }
+
+    function updateMouseUniform() {
+      if (!material || !material.uniforms || !material.uniforms.uMouse) return;
+      if (!mouseInfluence) {
+        material.uniforms.uMouse.value.set(0.5, 0.5);
+        return;
+      }
+      material.uniforms.uMouse.value.set(mousePos.x, mousePos.y);
+    }
+
+    function initThree() {
+      const container = document.body;
+
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: false,
+        powerPreference: "high-performance"
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      container.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x050505, 0.012);
+
+      camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 0, 5.2);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.1;
+      controls.enablePan = false;
+      controls.minDistance = 2.8;
+      controls.maxDistance = 12;
+      controls.maxPolarAngle = Math.PI * 0.92;
+
+      // Lighting (subtle, since shader is self-lit)
+      const ambient = new THREE.AmbientLight(0x334455, 0.4);
+      scene.add(ambient);
+
+      const hemi = new THREE.HemisphereLight(0xaaccff, 0x112244, 0.6);
+      scene.add(hemi);
+
+      // High-res sphere for nice fragment detail
+      const geometry = new THREE.SphereGeometry(2.1, 72, 72);
+      material = createShaderMaterial(currentEffect);
+      sphere = new THREE.Mesh(geometry, material);
+      scene.add(sphere);
+
+      // Subtle wireframe helper (toggleable)
+      const wireGeo = new THREE.SphereGeometry(2.12, 48, 48);
+      const wireMat = new THREE.MeshBasicMaterial({ 
+        color: 0x334455, 
+        wireframe: true, 
+        transparent: true, 
+        opacity: 0.15 
+      });
+      const wireHelper = new THREE.Mesh(wireGeo, wireMat);
+      sphere.add(wireHelper); // child so it follows
+
+      // Events
+      window.addEventListener('resize', onResize);
+      renderer.domElement.addEventListener('pointermove', onPointerMove);
+      renderer.domElement.addEventListener('dblclick', () => {
+        controls.target.set(0, 0, 0);
+        camera.position.set(0, 0, 5.2);
+        controls.update();
+      });
+
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 'r') resetCamera();
+        if (e.key.toLowerCase() === 'w') {
+          const wire = document.getElementById('toggle-wireframe');
+          wire.checked = !wire.checked;
+          if (sphere) sphere.material.wireframe = wire.checked;
+        }
+        if (['1','2','3','4'].includes(e.key)) {
+          const keys = Object.keys(effects);
+          switchEffect(keys[parseInt(e.key)-1]);
+        }
+      });
+
+      // Initial UI
+      setupEffectButtons();
+      setupSliders();
+
+      // Start
+      animate();
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onPointerMove(e) {
+      mousePos.x = e.clientX / window.innerWidth;
+      mousePos.y = 1.0 - (e.clientY / window.innerHeight);
+      updateMouseUniform();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      frame++;
+
+      if (!material || !sphere) return;
+
+      // Update time uniform
+      material.uniforms.uTime.value = performance.now() * 0.001;
+
+      // Auto rotate
+      if (autoRotate) {
+        sphere.rotation.y = frame * 0.0008;
+      }
+
+      updateMouseUniform();
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function resetCamera() {
+      if (!controls || !camera) return;
+      camera.position.set(0, 0, 5.2);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      sphere.rotation.y = 0;
+    }
+
+    function randomizeAll() {
+      // Randomize state
+      uniformState.intensity = 0.4 + Math.random() * 1.8;
+      uniformState.speed = 0.3 + Math.random() * 2.8;
+      uniformState.frequency = 2.5 + Math.random() * 14;
+      uniformState.strength = 0.5 + Math.random() * 2.2;
+
+      // Update sliders
+      document.getElementById('slider-intensity').value = uniformState.intensity;
+      document.getElementById('val-intensity').textContent = uniformState.intensity.toFixed(2);
+      
+      document.getElementById('slider-speed').value = uniformState.speed;
+      document.getElementById('val-speed').textContent = uniformState.speed.toFixed(2);
+      
+      document.getElementById('slider-frequency').value = uniformState.frequency;
+      document.getElementById('val-frequency').textContent = uniformState.frequency.toFixed(1);
+      
+      document.getElementById('slider-strength').value = uniformState.strength;
+      document.getElementById('val-strength').textContent = uniformState.strength.toFixed(2);
+
+      // Apply to current material
+      Object.keys(uniformState).forEach(key => {
+        updateUniform(key, uniformState[key]);
+      });
+
+      // Occasionally switch effect for fun
+      if (Math.random() > 0.6) {
+        const keys = Object.keys(effects);
+        const randomKey = keys[Math.floor(Math.random() * keys.length)];
+        switchEffect(randomKey);
+      }
+    }
+
+    function copyCurrentShader() {
+      const effect = effects[currentEffect];
+      if (!effect || !material) return;
+
+      const code = `// ${effect.name} — Fragment Shader\n// ${effect.description}\n\n` +
+        `uniform float uTime;\nuniform float uIntensity;\nuniform float uSpeed;\n` +
+        `uniform float uFrequency;\nuniform float uStrength;\nuniform vec3 uColorA;\nuniform vec3 uColorB;\nuniform vec2 uMouse;\n\n` +
+        effect.fragment.trim();
+
+      navigator.clipboard.writeText(code).then(() => {
+        const btns = document.querySelectorAll('button');
+        btns.forEach(b => {
+          if (b.innerText.includes('COPY')) {
+            const old = b.innerHTML;
+            b.innerHTML = `<span>COPIED!</span>`;
+            setTimeout(() => { b.innerHTML = old; }, 1400);
+          }
+        });
+      }).catch(() => {
+        prompt("Copy this shader code:", code);
+      });
+    }
+
+    // Boot everything
+    window.onload = () => {
+      initThree();
+      
+      // Make first effect button active
+      setTimeout(() => {
+        const firstBtn = document.querySelector('.effect-btn');
+        if (firstBtn) firstBtn.classList.add('active');
+      }, 50);
+
+      // Easter egg: press "?" for help
+      window.addEventListener('keypress', (e) => {
+        if (e.key === '?') {
+          alert("FRAGWARP Controls\\n\\n1-4: Switch effects quickly\\nR: Reset camera\\nW: Toggle wireframe\\nDrag: Orbit\\nScroll: Zoom\\nDouble-click: Recenter\\n\\nSliders update the active shader in real time.");
+        }
+      });
+    };
+  </script>
+</body>
+</html>
